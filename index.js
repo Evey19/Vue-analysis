@@ -427,3 +427,104 @@ function queueJob(job) {
     });
   }
 }
+
+function load(onError) {
+  // 请求接口，Promise实例
+  const p = fetch();
+  return p.catch((err) => {
+    return new Promise((resolve, reject) => {});
+  });
+}
+
+// 异步组件 以异步的方式加载并渲染一个组件
+function defineAsyncComponent(options) {
+  if (typeof options === "function") {
+    options = {
+      loader: options,
+    };
+  }
+  const { loader } = options;
+  let InnerComp = null;
+  return {
+    name: "AsyncComponentWrapper",
+    setup() {
+      const loaded = ref(false);
+      const error = shallowRef(null);
+      const loading = ref(false);
+      let loadingTimer = null;
+      if (options.delay) {
+        loadingTimer = setTimeout(() => {
+          loading.value = true;
+        }, options.delay);
+      } else {
+        loading.value = true;
+      }
+      const timeout = ref(false);
+      loader()
+        .then((c) => {
+          InnerComp = c;
+          loaded.value = true;
+        })
+        .catch((err) => (error.value = err))
+        .finally(() => {
+          loading.value = false;
+          clearTimeout(loadingTimer);
+        });
+      let timer = null;
+      if (options.timeout) {
+        timer = setTimeout(() => {
+          const err = new Error(`Async component`);
+          error.value = err;
+          timeout.value = true;
+        }, options.timeout);
+      }
+      onUnmounted(() => clearTimeout(timer));
+      const placeholder = { type: Text, children: "" };
+      return () => {
+        if (loaded.value) {
+          return { type: InnerComp };
+        } else if (timeout.value) {
+          return options.errorComponent
+            ? { type: options.errorComponent }
+            : placeholder;
+        }
+        return placeholder;
+      };
+    },
+  };
+}
+
+function dispatch(componentName, eventName, params) {
+  var parent = this.$parent || this.$root;
+  var name = parent.$options.componentName;
+  while (parent && (!name || name !== componentName)) {
+    parent = parent.$parent;
+    if (parent) {
+      name = parent.$options.componentName;
+    }
+  }
+  if (parent) {
+    parent.$emit.apply(parent, [eventName].concat(params));
+  }
+}
+
+function broadcast(componentName, eventName, params) {
+  this.$children.forEach((child) => {
+    var name = child.$options.componentName;
+    if (name === componentName) {
+      child.$emit.apply(child, [eventName].concat(params));
+    } else {
+      broadcast.apply(child, [componentName, eventName].concat([params]));
+    }
+  });
+}
+
+let myInstanceof = (target, origin) => {
+  while (target) {
+    if (target.__proto__ === origin.prototype) {
+      return true;
+    }
+    target = target.__proto__;
+  }
+  return false;
+};
